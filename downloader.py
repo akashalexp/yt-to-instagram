@@ -5,11 +5,13 @@ Downloads a YouTube Shorts video, its thumbnail, and description using yt-dlp.
 Key design: no ffmpeg dependency.
   - Video:     uses a pre-merged mp4 stream (no ffmpeg merging needed)
   - Thumbnail: fetched directly from YouTube's CDN via requests
-               (avoids yt-dlp's thumbnail postprocessor which requires ffmpeg)
+  - Auth:      uses YouTube cookies from YOUTUBE_COOKIES env var to bypass
+               bot detection on cloud servers (Render, etc.)
 """
 
 import os
 import glob
+import tempfile
 import traceback
 import requests
 import yt_dlp
@@ -18,33 +20,36 @@ DOWNLOADS_DIR = os.path.join(os.path.dirname(__file__), "downloads")
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
 
+def _get_cookies_file() -> str | None:
+    """
+    Write YOUTUBE_COOKIES env var content to a temp file and return its path.
+    Returns None if the env var is not set.
+    """
+    cookies_content = os.getenv("YOUTUBE_COOKIES", "").strip()
+    if not cookies_content:
+        return None
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w", suffix=".txt", delete=False, prefix="yt_cookies_"
+    )
+    tmp.write(cookies_content)
+    tmp.close()
+    return tmp.name
+
+
 def download_youtube_short(url: str) -> dict:
     """
     Download a YouTube Short (video + thumbnail) and return metadata.
-
-    Returns a dict with keys:
-        video_path     - absolute path to the downloaded .mp4 file
-        thumbnail_path - absolute path to the thumbnail image (jpg)
-        caption        - video description (falls back to title)
-        title          - video title
-        video_id       - YouTube video ID
-
-    On failure, returns {'error': '<message>'}.
     """
+    cookies_file = _get_cookies_file()
+
     ydl_opts = {
-        # Best pre-merged mp4 — no ffmpeg needed
         "format": "best[ext=mp4]/best[ext=webm]/best",
-        # Save as <video_id>.<ext> inside downloads/
         "outtmpl": os.path.join(DOWNLOADS_DIR, "%(id)s.%(ext)s"),
-        # Do NOT use writethumbnail — we fetch it manually below
         "writethumbnail": False,
         "quiet": True,
         "no_warnings": True,
         "writeinfojson": False,
-        # Disable all postprocessors to avoid ffmpeg dependency
         "postprocessors": [],
-        # Use only non-JS clients — avoids yt-dlp's JS runtime check
-        # which crashes on some Linux environments (Render, etc.)
         "extractor_args": {
             "youtube": {
                 "player_client": ["ios", "android", "web"]
@@ -52,11 +57,62 @@ def download_youtube_short(url: str) -> dict:
         },
     }
 
+    # Add cookies if available (needed on cloud servers to bypass bot detection)
+    if cookies_file:
+        ydl_opts["cookiefile"] = cookies_file
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
 
         video_id = info.get("id", "")
+
+        # --- Locate downloaded video file ---
+        video_path = None
+        for ext in ("mp4", "webm", "mkv"):
+            candidate = os.path.join(DOWNLOADS_DIR, f"{video_id}.{ext}")
+            if os.path.exists(candidate):
+                video_path = candidate
+                break
+
+        if not video_path:
+            matches = glob.glob(os.path.join(DOWNLOADS_DIR, f"{video_id}.*"))
+            video_matches = [
+                m for m in matches
+                if not m.endswith((".jpg", ".jpeg", ".png", ".webp", ".json"))
+            ]
+            if video_matches:
+                video_path = video_matches[0]
+
+        if not video_path:
+            return {"error": "Downloaded video file not found on disk."}
+
+        thumbnail_path = _download_thumbnail(info, video_id)
+
+        description = (info.get("description") or "").strip()
+        title = (info.get("title") or "").strip()
+        caption = description if description else title
+
+        return {
+            "video_path": video_path,
+            "thumbnail_path": thumbnail_path,
+            "caption": caption,
+            "title": title,
+            "video_id": video_id,
+        }
+
+    except yt_dlp.utils.DownloadError as exc:
+        return {"error": f"yt-dlp download error: {exc}"}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        return {"error": f"Unexpected error during download: {exc}\n\nFull traceback:\n{tb}"}
+    finally:
+        # Clean up temp cookies file
+        if cookies_file and os.path.exists(cookies_file):
+            try:
+                os.remove(cookies_file)
+            except OSError:
+                pass
 
         # --- Locate downloaded video file ---
         video_path = None
