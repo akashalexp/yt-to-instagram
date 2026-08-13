@@ -6,10 +6,14 @@ Returns local file paths and metadata.
 
 import os
 import glob
+import shutil
 import yt_dlp
 
 DOWNLOADS_DIR = os.path.join(os.path.dirname(__file__), "downloads")
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+
+# Detect whether ffmpeg is available on this system
+FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
 
 
 def download_youtube_short(url: str) -> dict:
@@ -25,10 +29,18 @@ def download_youtube_short(url: str) -> dict:
 
     On failure, returns {'error': '<message>'}.
     """
+    if FFMPEG_AVAILABLE:
+        # Best quality — merges separate video+audio streams via ffmpeg
+        fmt = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+        extra = {"merge_output_format": "mp4"}
+    else:
+        # No ffmpeg — pick the best pre-merged mp4 stream (works for Shorts)
+        fmt = "best[ext=mp4]/best[ext=webm]/best"
+        extra = {}
+
     ydl_opts = {
-        # Prefer mp4; merge audio+video into mp4 when separate streams exist
-        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-        "merge_output_format": "mp4",
+        "format": fmt,
+        **extra,
         # Save as <video_id>.mp4 inside downloads/
         "outtmpl": os.path.join(DOWNLOADS_DIR, "%(id)s.%(ext)s"),
         # Also download the thumbnail

@@ -2,7 +2,7 @@ services:
   - type: web
     name: yt-to-instagram
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: apt-get update -y && apt-get install -y ffmpeg && pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --worker-class gevent --workers 2 --timeout 660 --keep-alive 660
     envVars:
       - key: INSTAGRAM_ACCESS_TOKEN
