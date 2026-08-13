@@ -52,7 +52,9 @@ def download_youtube_short(url):
     cookies_file = _get_cookies_file()
 
     ydl_opts = {
-        "format": "best[ext=mp4]/best[ext=webm]/best",
+        # Best mp4 with audio — merges via ffmpeg if needed
+        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "merge_output_format": "mp4",
         "outtmpl": os.path.join(DOWNLOADS_DIR, "%(id)s.%(ext)s"),
         "writethumbnail": False,
         "quiet": True,
