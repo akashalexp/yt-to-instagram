@@ -10,6 +10,7 @@ Key design: no ffmpeg dependency.
 
 import os
 import glob
+import traceback
 import requests
 import yt_dlp
 
@@ -89,7 +90,8 @@ def download_youtube_short(url: str) -> dict:
     except yt_dlp.utils.DownloadError as exc:
         return {"error": f"yt-dlp download error: {exc}"}
     except Exception as exc:
-        return {"error": f"Unexpected error during download: {exc}"}
+        tb = traceback.format_exc()
+        return {"error": f"Unexpected error during download: {exc}\n\nFull traceback:\n{tb}"}
 
 
 def _download_thumbnail(info: dict, video_id: str) -> str | None:
