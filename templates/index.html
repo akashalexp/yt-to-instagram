@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YT Shorts → Instagram Reels</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0d0d;
+      --surface:   #1a1a1a;
+      --border:    #2e2e2e;
+      --accent:    #e1306c;   /* Instagram pink */
+      --accent2:   #833ab4;   /* Instagram purple */
+      --text:      #f0f0f0;
+      --muted:     #888;
+      --success:   #4caf50;
+      --error:     #f44336;
+      --info:      #90caf9;
+      --radius:    12px;
+      --font:      'Segoe UI', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px 80px;
+    }
+
+    /* --- Header --- */
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    header p {
+      color: var(--muted);
+      margin-top: 8px;
+      font-size: 0.95rem;
+    }
+
+    /* --- Card --- */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    /* --- Input row --- */
+    .input-row {
+      display: flex;
+      gap: 10px;
+    }
+    input[type="url"] {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.95rem;
+      padding: 12px 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="url"]:focus {
+      border-color: var(--accent);
+    }
+    input[type="url"]::placeholder { color: var(--muted); }
+
+    button#post-btn {
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 12px 22px;
+      transition: opacity 0.2s;
+      white-space: nowrap;
+    }
+    button#post-btn:hover:not(:disabled) { opacity: 0.85; }
+    button#post-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* --- Progress area --- */
+    #progress {
+      margin-top: 28px;
+      display: none;
+    }
+
+    .step-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      animation: fadeIn 0.25s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .step-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+
+    .step.info    .step-icon::before { content: '⏳'; }
+    .step.success .step-icon::before { content: '✅'; }
+    .step.error   .step-icon::before { content: '❌'; }
+
+    .step.info    { border-color: #2a4060; color: var(--info); }
+    .step.success { border-color: #1e4d2e; color: var(--success); }
+    .step.error   { border-color: #4d1e1e; color: var(--error); }
+
+    /* --- Spinner --- */
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* --- Result card --- */
+    #result {
+      display: none;
+      margin-top: 24px;
+      padding: 20px;
+      border-radius: var(--radius);
+      border: 1px solid #1e4d2e;
+      background: #0d1f14;
+    }
+    #result h3 {
+      color: var(--success);
+      margin-bottom: 12px;
+      font-size: 1rem;
+    }
+    #result .meta { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+    #result .meta strong { color: var(--text); }
+
+    /* --- Reset button --- */
+    #reset-btn {
+      display: none;
+      margin-top: 20px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.875rem;
+      padding: 8px 18px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    #reset-btn:hover { color: var(--text); border-color: var(--text); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>YouTube Shorts → Instagram Reels</h1>
+  <p>Paste a YouTube Shorts link and post it directly to your Instagram page.</p>
+</header>
+
+<div class="card">
+  <div class="input-row">
+    <input
+      type="url"
+      id="url-input"
+      placeholder="https://youtube.com/shorts/..."
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <button id="post-btn">Post to Instagram</button>
+  </div>
+
+  <!-- Progress log -->
+  <div id="progress">
+    <ul class="step-list" id="step-list"></ul>
+  </div>
+
+  <!-- Success result -->
+  <div id="result">
+    <h3>Reel posted successfully!</h3>
+    <div class="meta" id="result-meta"></div>
+  </div>
+
+  <button id="reset-btn">Post another</button>
+</div>
+
+<script>
+  const urlInput  = document.getElementById('url-input');
+  const postBtn   = document.getElementById('post-btn');
+  const progress  = document.getElementById('progress');
+  const stepList  = document.getElementById('step-list');
+  const resultDiv = document.getElementById('result');
+  const resultMeta= document.getElementById('result-meta');
+  const resetBtn  = document.getElementById('reset-btn');
+
+  let activeSource = null;
+
+  // ----------------------------------------------------------------
+  // Add a progress step to the list
+  // ----------------------------------------------------------------
+  function addStep(message, type = 'info') {
+    const li = document.createElement('li');
+    li.className = `step ${type}`;
+    li.innerHTML = `<span class="step-icon"></span><span>${escapeHtml(message)}</span>`;
+    stepList.appendChild(li);
+    li.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function addSpinner(message) {
+    const li = document.createElement('li');
+    li.className = 'step info';
+    li.id = 'spinner-step';
+    li.innerHTML = `<span class="spinner"></span><span>${escapeHtml(message)}</span>`;
+    stepList.appendChild(li);
+    li.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function removeSpinner() {
+    const el = document.getElementById('spinner-step');
+    if (el) el.remove();
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ----------------------------------------------------------------
+  // Reset UI to initial state
+  // ----------------------------------------------------------------
+  function reset() {
+    urlInput.value = '';
+    urlInput.disabled = false;
+    postBtn.disabled = false;
+    progress.style.display = 'none';
+    stepList.innerHTML = '';
+    resultDiv.style.display = 'none';
+    resultMeta.innerHTML = '';
+    resetBtn.style.display = 'none';
+    if (activeSource) { activeSource.close(); activeSource = null; }
+  }
+
+  resetBtn.addEventListener('click', reset);
+
+  // ----------------------------------------------------------------
+  // Post button handler
+  // ----------------------------------------------------------------
+  postBtn.addEventListener('click', () => {
+    const url = urlInput.value.trim();
+    if (!url) {
+      urlInput.focus();
+      return;
+    }
+
+    // Lock UI
+    urlInput.disabled = true;
+    postBtn.disabled = true;
+    stepList.innerHTML = '';
+    resultDiv.style.display = 'none';
+    progress.style.display = 'block';
+    resetBtn.style.display = 'none';
+
+    addSpinner('Connecting...');
+
+    // Open SSE stream
+    const sse = new EventSource(`/post?url=${encodeURIComponent(url)}`);
+    activeSource = sse;
+
+    sse.onmessage = (event) => {
+      removeSpinner();
+      let data;
+      try { data = JSON.parse(event.data); }
+      catch { return; }
+
+      const { step, message, type, success, media_id, title, caption } = data;
+
+      if (step === 'done') {
+        sse.close();
+        activeSource = null;
+        if (success) {
+          resultMeta.innerHTML =
+            `<strong>Title:</strong> ${escapeHtml(title || '')}<br>` +
+            `<strong>Media ID:</strong> ${escapeHtml(media_id || '')}<br>` +
+            `<strong>Caption preview:</strong> ${escapeHtml((caption || '').slice(0, 120))}${(caption||'').length > 120 ? '…' : ''}`;
+          resultDiv.style.display = 'block';
+        }
+        resetBtn.style.display = 'inline-block';
+        return;
+      }
+
+      // Regular step message
+      addStep(message, type || 'info');
+
+      // Add a new spinner if still in progress
+      if (type === 'info') {
+        addSpinner('Working...');
+      }
+    };
+
+    sse.onerror = () => {
+      removeSpinner();
+      addStep('Connection lost or server error. Check the terminal for details.', 'error');
+      sse.close();
+      activeSource = null;
+      resetBtn.style.display = 'inline-block';
+    };
+  });
+
+  // Allow pressing Enter in the input field
+  urlInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') postBtn.click();
+  });
+</script>
+
+</body>
+</html>
