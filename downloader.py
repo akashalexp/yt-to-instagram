@@ -43,6 +43,13 @@ def download_youtube_short(url: str) -> dict:
         "writeinfojson": False,
         # Disable all postprocessors to avoid ffmpeg dependency
         "postprocessors": [],
+        # Use only non-JS clients — avoids yt-dlp's JS runtime check
+        # which crashes on some Linux environments (Render, etc.)
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["ios", "android", "web"]
+            }
+        },
     }
 
     try:
