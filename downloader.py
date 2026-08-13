@@ -59,11 +59,6 @@ def download_youtube_short(url):
         "no_warnings": True,
         "writeinfojson": False,
         "postprocessors": [],
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["ios", "android", "web"]
-            }
-        },
     }
 
     if cookies_file:
