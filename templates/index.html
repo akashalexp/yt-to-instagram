@@ -3,23 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>YT Shorts → Instagram Reels</title>
+  <title>Post to Instagram</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #0d0d0d;
-      --surface:   #1a1a1a;
-      --border:    #2e2e2e;
-      --accent:    #e1306c;   /* Instagram pink */
-      --accent2:   #833ab4;   /* Instagram purple */
-      --text:      #f0f0f0;
-      --muted:     #888;
-      --success:   #4caf50;
-      --error:     #f44336;
-      --info:      #90caf9;
-      --radius:    12px;
-      --font:      'Segoe UI', system-ui, sans-serif;
+      --bg:      #0d0d0d;
+      --surface: #1a1a1a;
+      --border:  #2e2e2e;
+      --accent:  #e1306c;
+      --accent2: #833ab4;
+      --text:    #f0f0f0;
+      --muted:   #888;
+      --success: #4caf50;
+      --error:   #f44336;
+      --info:    #90caf9;
+      --radius:  12px;
+      --font:    'Segoe UI', system-ui, sans-serif;
     }
 
     body {
@@ -33,183 +33,181 @@
       padding: 40px 16px 80px;
     }
 
-    /* --- Header --- */
-    header {
-      text-align: center;
-      margin-bottom: 40px;
-    }
+    header { text-align: center; margin-bottom: 36px; }
     header h1 {
-      font-size: 2rem;
+      font-size: 1.9rem;
       font-weight: 700;
       background: linear-gradient(135deg, var(--accent2), var(--accent));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
-    header p {
-      color: var(--muted);
-      margin-top: 8px;
-      font-size: 0.95rem;
-    }
+    header p { color: var(--muted); margin-top: 8px; font-size: 0.95rem; }
 
-    /* --- Card --- */
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 32px;
       width: 100%;
-      max-width: 600px;
+      max-width: 580px;
     }
 
-    /* --- Input row --- */
-    .input-row {
-      display: flex;
-      gap: 10px;
+    /* --- Drop zone --- */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
     }
-    input[type="url"] {
-      flex: 1;
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(225, 48, 108, 0.05);
+    }
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .drop-zone .icon { font-size: 2.5rem; margin-bottom: 10px; }
+    .drop-zone .label { font-size: 0.95rem; color: var(--muted); }
+    .drop-zone .label span { color: var(--accent); font-weight: 600; }
+    .drop-zone .selected-file {
+      margin-top: 10px;
+      font-size: 0.85rem;
+      color: var(--success);
+      font-weight: 500;
+    }
+
+    /* --- Caption --- */
+    .field { margin-top: 20px; }
+    .field label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    textarea {
+      width: 100%;
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 8px;
       color: var(--text);
-      font-size: 0.95rem;
-      padding: 12px 14px;
+      font-family: var(--font);
+      font-size: 0.9rem;
+      padding: 12px;
+      resize: vertical;
+      min-height: 100px;
       outline: none;
       transition: border-color 0.2s;
     }
-    input[type="url"]:focus {
-      border-color: var(--accent);
-    }
-    input[type="url"]::placeholder { color: var(--muted); }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--muted); }
 
+    /* --- Post button --- */
     button#post-btn {
+      margin-top: 20px;
+      width: 100%;
       background: linear-gradient(135deg, var(--accent2), var(--accent));
       border: none;
       border-radius: 8px;
       color: #fff;
       cursor: pointer;
-      font-size: 0.95rem;
+      font-size: 1rem;
       font-weight: 600;
-      padding: 12px 22px;
+      padding: 14px;
       transition: opacity 0.2s;
-      white-space: nowrap;
     }
     button#post-btn:hover:not(:disabled) { opacity: 0.85; }
     button#post-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    /* --- Progress area --- */
-    #progress {
-      margin-top: 28px;
-      display: none;
-    }
-
-    .step-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
+    /* --- Progress --- */
+    #progress { margin-top: 24px; display: none; }
+    .step-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
     .step {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      font-size: 0.9rem;
-      line-height: 1.4;
-      padding: 10px 14px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: var(--bg);
-      animation: fadeIn 0.25s ease;
+      display: flex; align-items: flex-start; gap: 10px;
+      font-size: 0.88rem; line-height: 1.4;
+      padding: 10px 14px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--bg);
+      animation: fadeIn 0.2s ease;
     }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    .step-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
-
-    .step.info    .step-icon::before { content: '⏳'; }
-    .step.success .step-icon::before { content: '✅'; }
-    .step.error   .step-icon::before { content: '❌'; }
-
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
     .step.info    { border-color: #2a4060; color: var(--info); }
     .step.success { border-color: #1e4d2e; color: var(--success); }
     .step.error   { border-color: #4d1e1e; color: var(--error); }
-
-    /* --- Spinner --- */
+    .step.info    .icon::before { content: '⏳'; }
+    .step.success .icon::before { content: '✅'; }
+    .step.error   .icon::before { content: '❌'; }
     .spinner {
-      display: inline-block;
-      width: 14px;
-      height: 14px;
-      border: 2px solid rgba(255,255,255,0.2);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      flex-shrink: 0;
+      display: inline-block; width: 13px; height: 13px; flex-shrink: 0; margin-top: 2px;
+      border: 2px solid rgba(255,255,255,0.2); border-top-color:#fff;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* --- Result card --- */
+    /* --- Result --- */
     #result {
-      display: none;
-      margin-top: 24px;
-      padding: 20px;
-      border-radius: var(--radius);
-      border: 1px solid #1e4d2e;
-      background: #0d1f14;
+      display: none; margin-top: 20px; padding: 18px;
+      border-radius: var(--radius); border: 1px solid #1e4d2e; background: #0d1f14;
     }
-    #result h3 {
-      color: var(--success);
-      margin-bottom: 12px;
-      font-size: 1rem;
-    }
-    #result .meta { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+    #result h3 { color: var(--success); margin-bottom: 10px; font-size: 0.95rem; }
+    #result .meta { font-size: 0.82rem; color: var(--muted); line-height: 1.6; }
     #result .meta strong { color: var(--text); }
 
-    /* --- Reset button --- */
     #reset-btn {
-      display: none;
-      margin-top: 20px;
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--muted);
-      cursor: pointer;
-      font-size: 0.875rem;
-      padding: 8px 18px;
+      display: none; margin-top: 16px; background: transparent;
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--muted); cursor: pointer; font-size: 0.875rem; padding: 8px 18px;
       transition: color 0.2s, border-color 0.2s;
     }
     #reset-btn:hover { color: var(--text); border-color: var(--text); }
+
+    .progress-bar-wrap {
+      height: 3px; background: var(--border); border-radius: 2px; margin-top: 16px; display: none;
+    }
+    .progress-bar {
+      height: 100%; background: linear-gradient(90deg, var(--accent2), var(--accent));
+      border-radius: 2px; width: 0%; transition: width 0.3s ease;
+    }
   </style>
 </head>
 <body>
 
 <header>
-  <h1>YouTube Shorts → Instagram Reels</h1>
-  <p>Paste a YouTube Shorts link and post it directly to your Instagram page.</p>
+  <h1>Post to Instagram Reels</h1>
+  <p>Upload a video and post it directly to your Instagram page.</p>
 </header>
 
 <div class="card">
-  <div class="input-row">
-    <input
-      type="url"
-      id="url-input"
-      placeholder="https://youtube.com/shorts/..."
-      autocomplete="off"
-      spellcheck="false"
-    />
-    <button id="post-btn">Post to Instagram</button>
+
+  <!-- Drop zone -->
+  <div class="drop-zone" id="drop-zone">
+    <input type="file" id="video-input" accept="video/*" />
+    <div class="icon">🎬</div>
+    <div class="label">Drag &amp; drop your video here, or <span>browse</span></div>
+    <div class="selected-file" id="file-name"></div>
   </div>
 
-  <!-- Progress log -->
+  <!-- Caption -->
+  <div class="field">
+    <label for="caption">Caption (hashtags, mentions, etc.)</label>
+    <textarea id="caption" placeholder="Write your caption here..."></textarea>
+  </div>
+
+  <button id="post-btn" disabled>Select a video first</button>
+
+  <!-- Upload progress bar -->
+  <div class="progress-bar-wrap" id="progress-bar-wrap">
+    <div class="progress-bar" id="progress-bar"></div>
+  </div>
+
+  <!-- Step log -->
   <div id="progress">
     <ul class="step-list" id="step-list"></ul>
   </div>
 
-  <!-- Success result -->
+  <!-- Result -->
   <div id="result">
     <h3>Reel posted successfully!</h3>
     <div class="meta" id="result-meta"></div>
@@ -219,129 +217,148 @@
 </div>
 
 <script>
-  const urlInput  = document.getElementById('url-input');
-  const postBtn   = document.getElementById('post-btn');
-  const progress  = document.getElementById('progress');
-  const stepList  = document.getElementById('step-list');
-  const resultDiv = document.getElementById('result');
-  const resultMeta= document.getElementById('result-meta');
-  const resetBtn  = document.getElementById('reset-btn');
+  const dropZone    = document.getElementById('drop-zone');
+  const videoInput  = document.getElementById('video-input');
+  const fileNameEl  = document.getElementById('file-name');
+  const captionEl   = document.getElementById('caption');
+  const postBtn     = document.getElementById('post-btn');
+  const progressDiv = document.getElementById('progress');
+  const stepList    = document.getElementById('step-list');
+  const resultDiv   = document.getElementById('result');
+  const resultMeta  = document.getElementById('result-meta');
+  const resetBtn    = document.getElementById('reset-btn');
+  const pbWrap      = document.getElementById('progress-bar-wrap');
+  const pb          = document.getElementById('progress-bar');
 
-  let activeSource = null;
+  let selectedFile = null;
 
-  // ----------------------------------------------------------------
-  // Add a progress step to the list
-  // ----------------------------------------------------------------
-  function addStep(message, type = 'info') {
+  // ── File selection ─────────────────────────────────────────────
+  videoInput.addEventListener('change', () => {
+    if (videoInput.files[0]) selectFile(videoInput.files[0]);
+  });
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) selectFile(e.dataTransfer.files[0]);
+  });
+
+  function selectFile(file) {
+    selectedFile = file;
+    fileNameEl.textContent = `Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`;
+    postBtn.disabled = false;
+    postBtn.textContent = 'Post to Instagram';
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────
+  function addStep(msg, type = 'info') {
+    removeSpinner();
     const li = document.createElement('li');
     li.className = `step ${type}`;
-    li.innerHTML = `<span class="step-icon"></span><span>${escapeHtml(message)}</span>`;
+    li.innerHTML = `<span class="icon"></span><span>${esc(msg)}</span>`;
     stepList.appendChild(li);
     li.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  function addSpinner(message) {
+  function addSpinner(msg) {
+    removeSpinner();
     const li = document.createElement('li');
-    li.className = 'step info';
-    li.id = 'spinner-step';
-    li.innerHTML = `<span class="spinner"></span><span>${escapeHtml(message)}</span>`;
+    li.className = 'step info'; li.id = 'spinner-step';
+    li.innerHTML = `<span class="spinner"></span><span>${esc(msg)}</span>`;
     stepList.appendChild(li);
-    li.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function removeSpinner() {
-    const el = document.getElementById('spinner-step');
-    if (el) el.remove();
+    document.getElementById('spinner-step')?.remove();
   }
 
-  function escapeHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
-  // ----------------------------------------------------------------
-  // Reset UI to initial state
-  // ----------------------------------------------------------------
   function reset() {
-    urlInput.value = '';
-    urlInput.disabled = false;
-    postBtn.disabled = false;
-    progress.style.display = 'none';
+    selectedFile = null;
+    videoInput.value = '';
+    fileNameEl.textContent = '';
+    captionEl.value = '';
+    captionEl.disabled = false;
+    postBtn.disabled = true;
+    postBtn.textContent = 'Select a video first';
+    progressDiv.style.display = 'none';
     stepList.innerHTML = '';
     resultDiv.style.display = 'none';
     resultMeta.innerHTML = '';
     resetBtn.style.display = 'none';
-    if (activeSource) { activeSource.close(); activeSource = null; }
+    pbWrap.style.display = 'none';
+    pb.style.width = '0%';
   }
 
   resetBtn.addEventListener('click', reset);
 
-  // ----------------------------------------------------------------
-  // Post button handler
-  // ----------------------------------------------------------------
-  postBtn.addEventListener('click', () => {
-    const url = urlInput.value.trim();
-    if (!url) {
-      urlInput.focus();
-      return;
-    }
+  // ── Post ───────────────────────────────────────────────────────
+  postBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
 
     // Lock UI
-    urlInput.disabled = true;
     postBtn.disabled = true;
+    captionEl.disabled = true;
     stepList.innerHTML = '';
+    progressDiv.style.display = 'block';
     resultDiv.style.display = 'none';
-    progress.style.display = 'block';
     resetBtn.style.display = 'none';
+    pbWrap.style.display = 'block';
 
-    addSpinner('Connecting...');
+    addSpinner('Uploading video...');
 
-    // Open SSE stream
-    const sse = new EventSource(`/post?url=${encodeURIComponent(url)}`);
-    activeSource = sse;
+    const formData = new FormData();
+    formData.append('video', selectedFile);
+    formData.append('caption', captionEl.value.trim());
 
-    sse.onmessage = (event) => {
+    // Upload with XHR so we can track progress
+    const xhr = new XMLHttpRequest();
+
+    xhr.upload.addEventListener('progress', e => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        pb.style.width = `${pct}%`;
+        document.getElementById('spinner-step').querySelector('span:last-child').textContent =
+          `Uploading video... ${pct}%`;
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      pbWrap.style.display = 'none';
       removeSpinner();
+
       let data;
-      try { data = JSON.parse(event.data); }
-      catch { return; }
+      try { data = JSON.parse(xhr.responseText); }
+      catch { addStep('Server returned an invalid response.', 'error'); resetBtn.style.display = 'inline-block'; return; }
 
-      const { step, message, type, success, media_id, title, caption } = data;
-
-      if (step === 'done') {
-        sse.close();
-        activeSource = null;
-        if (success) {
-          resultMeta.innerHTML =
-            `<strong>Title:</strong> ${escapeHtml(title || '')}<br>` +
-            `<strong>Media ID:</strong> ${escapeHtml(media_id || '')}<br>` +
-            `<strong>Caption preview:</strong> ${escapeHtml((caption || '').slice(0, 120))}${(caption||'').length > 120 ? '…' : ''}`;
-          resultDiv.style.display = 'block';
-        }
-        resetBtn.style.display = 'inline-block';
-        return;
+      if (data.success) {
+        addStep('Reel posted successfully!', 'success');
+        resultMeta.innerHTML =
+          `<strong>Media ID:</strong> ${esc(data.media_id || '')}<br>` +
+          `<strong>Caption:</strong> ${esc((data.caption || '').slice(0, 120))}${(data.caption||'').length > 120 ? '…' : ''}`;
+        resultDiv.style.display = 'block';
+      } else {
+        // Show each step in the progress array
+        (data.steps || []).forEach(s => addStep(s.message, s.type));
+        addStep(data.error || 'An error occurred.', 'error');
       }
 
-      // Regular step message
-      addStep(message, type || 'info');
-
-      // Add a new spinner if still in progress
-      if (type === 'info') {
-        addSpinner('Working...');
-      }
-    };
-
-    sse.onerror = () => {
-      removeSpinner();
-      addStep('Connection lost or server error. Check the terminal for details.', 'error');
-      sse.close();
-      activeSource = null;
       resetBtn.style.display = 'inline-block';
-    };
-  });
+    });
 
-  // Allow pressing Enter in the input field
-  urlInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') postBtn.click();
+    xhr.addEventListener('error', () => {
+      removeSpinner();
+      addStep('Network error — could not reach the server.', 'error');
+      resetBtn.style.display = 'inline-block';
+    });
+
+    xhr.open('POST', '/upload');
+    xhr.send(formData);
   });
 </script>
 

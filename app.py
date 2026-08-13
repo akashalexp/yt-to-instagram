@@ -1,75 +1,39 @@
 """
 app.py
-Flask web application for the YouTube Shorts → Instagram Reels pipeline.
-
-- Locally:  auto-starts an ngrok tunnel so Instagram can reach the local server.
-            Set NGROK_AUTHTOKEN in .env (free account at ngrok.com).
-- On Render: uses RENDER_EXTERNAL_URL automatically (no ngrok needed).
+Flask web application — Upload a video and post it to Instagram Reels.
 
 Routes:
-  GET  /                      - Web UI
-  GET  /post                  - SSE stream (real-time progress updates)
-  GET  /media/<filename>      - Temporarily serves downloaded media files
-  GET  /health                - Quick health check
+  GET  /                  - Web UI
+  POST /upload            - Accept video file + caption, post to Instagram
+  GET  /media/<filename>  - Temporarily serve uploaded files for Instagram API
+  GET  /health            - Health check
 """
 
 import json
 import os
-import queue
 import threading
 import time
+import uuid
 
 from dotenv import load_dotenv
-from flask import Flask, Response, render_template, request, send_from_directory, stream_with_context
+from flask import Flask, Response, jsonify, render_template, request, send_from_directory
 
-from downloader import DOWNLOADS_DIR, cleanup_files, download_youtube_short
+from downloader import DOWNLOADS_DIR, cleanup_files
 from instagram_api import InstagramAPI, InstagramAPIError
 
 load_dotenv()
 
 app = Flask(__name__)
-
-# ---------------------------------------------------------------------------
-# ngrok tunnel (local dev only)
-# ---------------------------------------------------------------------------
-
-_ngrok_url: str | None = None
-
-def _start_ngrok(port: int) -> str | None:
-    """
-    Start an ngrok tunnel on the given port and return the public HTTPS URL.
-    Only runs when RENDER_EXTERNAL_URL is not set (i.e. local development).
-    Requires NGROK_AUTHTOKEN in .env.
-    """
-    try:
-        from pyngrok import ngrok, conf
-        auth_token = os.getenv("NGROK_AUTHTOKEN")
-        if auth_token:
-            conf.get_default().auth_token = auth_token
-        tunnel = ngrok.connect(port, "http")
-        url = tunnel.public_url.replace("http://", "https://")
-        print(f"\n  ngrok tunnel active: {url}\n")
-        return url
-    except Exception as exc:
-        print(f"  [warning] Could not start ngrok: {exc}")
-        print("  Instagram will not be able to fetch local files.")
-        print("  Set NGROK_AUTHTOKEN in .env to enable the tunnel.\n")
-        return None
+app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500 MB max upload
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _base_url() -> str:
-    """
-    Return the public base URL of this app.
-    Priority: RENDER_EXTERNAL_URL → ngrok tunnel → localhost (fallback)
-    """
     render_url = os.getenv("RENDER_EXTERNAL_URL")
     if render_url:
         return render_url.rstrip("/")
-    if _ngrok_url:
-        return _ngrok_url.rstrip("/")
     return "http://localhost:5050"
 
 
@@ -84,7 +48,6 @@ def _instagram_client() -> InstagramAPI:
 
 
 def _public_url(filename: str) -> str:
-    """Build the public URL for a file served by this app."""
     return f"{_base_url()}/media/{filename}"
 
 
@@ -104,139 +67,77 @@ def health():
 
 @app.route("/media/<path:filename>")
 def serve_media(filename):
-    """
-    Temporarily serve downloaded media files so Instagram can fetch them.
-    Files are deleted automatically after Instagram finishes processing.
-    """
+    """Temporarily serve uploaded files so Instagram's API can fetch them."""
     return send_from_directory(DOWNLOADS_DIR, filename)
 
 
-@app.route("/post")
-def post_stream():
+@app.route("/upload", methods=["POST"])
+def upload():
     """
-    SSE endpoint — streams real-time progress to the browser.
-
-    Query param:
-        url  - YouTube Shorts URL to process
-
-    Events emitted (JSON):
-        { "step": "...", "message": "...", "type": "info|success|error" }
+    Accept a video file + caption via multipart form upload.
+    Save the file, post to Instagram, clean up, return JSON result.
     """
-    youtube_url = request.args.get("url", "").strip()
+    video_path = None
 
-    def generate():
-        msg_queue: queue.Queue = queue.Queue()
+    try:
+        # --- Validate Instagram config ---
+        try:
+            ig = _instagram_client()
+        except RuntimeError as exc:
+            return jsonify({"success": False, "error": str(exc)}), 400
 
-        def emit(step: str, message: str, event_type: str = "info"):
-            payload = json.dumps({"step": step, "message": message, "type": event_type})
-            msg_queue.put(f"data: {payload}\n\n")
+        # --- Validate file ---
+        if "video" not in request.files:
+            return jsonify({"success": False, "error": "No video file provided."}), 400
 
-        def emit_done(success: bool, extra: dict | None = None):
-            payload = {"step": "done", "success": success}
-            if extra:
-                payload.update(extra)
-            msg_queue.put(f"data: {json.dumps(payload)}\n\n")
-            msg_queue.put(None)  # sentinel — tells generator to stop
+        video_file = request.files["video"]
+        if not video_file.filename:
+            return jsonify({"success": False, "error": "Empty filename."}), 400
 
-        def run_pipeline():
-            video_path = None
-            thumbnail_path = None
+        caption = request.form.get("caption", "").strip()
 
-            try:
-                # --- Validate config ---
-                try:
-                    ig = _instagram_client()
-                except RuntimeError as exc:
-                    emit("config", str(exc), "error")
-                    emit_done(False)
-                    return
+        # --- Save uploaded file ---
+        ext = os.path.splitext(video_file.filename)[1].lower() or ".mp4"
+        filename = f"upload_{uuid.uuid4().hex}{ext}"
+        video_path = os.path.join(DOWNLOADS_DIR, filename)
+        video_file.save(video_path)
 
-                if not youtube_url:
-                    emit("input", "No URL provided.", "error")
-                    emit_done(False)
-                    return
+        # --- Build public URL for Instagram to fetch from ---
+        video_url = _public_url(filename)
 
-                # --- Warn if YouTube cookies not configured ---
-                if not os.getenv("YOUTUBE_COOKIES"):
-                    emit("download", "WARNING: YOUTUBE_COOKIES not set — YouTube may block the download as a bot. Add it in Render environment variables.", "error")
-                    emit_done(False)
-                    return
+        # --- Post to Instagram ---
+        steps = []
 
-                # --- Step 1: Download from YouTube ---
-                emit("download", "Downloading video from YouTube...", "info")
-                result = download_youtube_short(youtube_url)
-                if "error" in result:
-                    emit("download", result["error"], "error")
-                    emit_done(False)
-                    return
+        def progress(msg):
+            steps.append({"message": msg, "type": "info"})
 
-                video_path = result["video_path"]
-                thumbnail_path = result["thumbnail_path"]
-                caption = result["caption"]
-                title = result["title"]
-                emit("download", f'Downloaded: "{title}"', "info")
+        progress(f"Video saved ({os.path.getsize(video_path) / 1024 / 1024:.1f} MB). Sending to Instagram...")
+        published = ig.post_reel(
+            video_url=video_url,
+            caption=caption,
+            cover_url=None,
+            progress_callback=progress,
+        )
 
-                # --- Step 2: Build public URLs (served by this app) ---
-                video_filename = os.path.basename(video_path)
-                video_url = _public_url(video_filename)
+        media_id = published.get("id", "")
+        return jsonify({
+            "success": True,
+            "media_id": media_id,
+            "caption": caption,
+            "steps": steps,
+        })
 
-                cover_url = None
-                if thumbnail_path:
-                    thumb_filename = os.path.basename(thumbnail_path)
-                    cover_url = _public_url(thumb_filename)
-
-                emit("upload", f"Files ready at {_base_url()}", "info")
-
-                # --- Step 3: Post to Instagram ---
-                def ig_progress(msg):
-                    emit("instagram", msg, "info")
-
-                emit("instagram", "Sending to Instagram...", "info")
-                published = ig.post_reel(
-                    video_url=video_url,
-                    caption=caption,
-                    cover_url=cover_url,
-                    progress_callback=ig_progress,
-                )
-
-                media_id = published.get("id", "")
-                emit("instagram", f"Reel published! Media ID: {media_id}", "success")
-                emit_done(True, {"media_id": media_id, "title": title, "caption": caption})
-
-            except InstagramAPIError as exc:
-                emit("instagram", str(exc), "error")
-                emit_done(False)
-            except Exception as exc:
-                emit("error", f"Unexpected error: {exc}", "error")
-                emit_done(False)
-            finally:
-                # Give Instagram a moment to finish downloading before we delete
-                time.sleep(5)
-                cleanup_files(video_path, thumbnail_path)
-
-        # Run pipeline in a background thread so SSE can stream
-        thread = threading.Thread(target=run_pipeline, daemon=True)
-        thread.start()
-
-        # Yield SSE messages as they arrive
-        while True:
-            try:
-                item = msg_queue.get(timeout=660)  # matches gunicorn timeout
-            except queue.Empty:
-                yield 'data: {"step": "error", "message": "Pipeline timed out.", "type": "error"}\n\n'
-                break
-            if item is None:
-                break
-            yield item
-
-    return Response(
-        stream_with_context(generate()),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # Prevents nginx from buffering SSE
-        },
-    )
+    except InstagramAPIError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"success": False, "error": f"Unexpected error: {exc}"}), 500
+    finally:
+        # Give Instagram time to download before deleting
+        def _cleanup():
+            time.sleep(30)
+            cleanup_files(video_path)
+        if video_path:
+            threading.Thread(target=_cleanup, daemon=True).start()
 
 
 # ---------------------------------------------------------------------------
@@ -244,8 +145,4 @@ def post_stream():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    PORT = 5050
-    # Start ngrok only when running locally (not on Render)
-    if not os.getenv("RENDER_EXTERNAL_URL"):
-        _ngrok_url = _start_ngrok(PORT)
-    app.run(debug=False, port=PORT, threaded=True)
+    app.run(debug=False, port=5050, threaded=True)
