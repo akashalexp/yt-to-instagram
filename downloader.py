@@ -11,7 +11,6 @@ Key design: no ffmpeg dependency.
 
 import os
 import glob
-import tempfile
 import traceback
 import requests
 import yt_dlp
@@ -22,18 +21,17 @@ os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
 def _get_cookies_file():
     """
-    Write YOUTUBE_COOKIES env var content to a temp file and return its path.
+    Write YOUTUBE_COOKIES env var content to a fixed file and return its path.
     Returns None if the env var is not set.
     """
     cookies_content = os.getenv("YOUTUBE_COOKIES", "").strip()
     if not cookies_content:
         return None
-    tmp = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".txt", delete=False, prefix="yt_cookies_"
-    )
-    tmp.write(cookies_content)
-    tmp.close()
-    return tmp.name
+    # Use a fixed path (not temp) to avoid permission issues on Linux
+    cookies_path = os.path.join(DOWNLOADS_DIR, "yt_cookies.txt")
+    with open(cookies_path, "w", encoding="utf-8") as f:
+        f.write(cookies_content)
+    return cookies_path
 
 
 def download_youtube_short(url):
@@ -60,7 +58,6 @@ def download_youtube_short(url):
         "quiet": True,
         "no_warnings": True,
         "writeinfojson": False,
-        "postprocessors": [],
     }
 
     if cookies_file:

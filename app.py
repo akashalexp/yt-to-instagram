@@ -2,8 +2,9 @@
 app.py
 Flask web application for the YouTube Shorts → Instagram Reels pipeline.
 
-On Render, the app has a public URL so it can serve the downloaded video/thumbnail
-directly to Instagram's API — no third-party file host (Cloudinary etc.) needed.
+- Locally:  auto-starts an ngrok tunnel so Instagram can reach the local server.
+            Set NGROK_AUTHTOKEN in .env (free account at ngrok.com).
+- On Render: uses RENDER_EXTERNAL_URL automatically (no ngrok needed).
 
 Routes:
   GET  /                      - Web UI
@@ -29,16 +30,47 @@ load_dotenv()
 app = Flask(__name__)
 
 # ---------------------------------------------------------------------------
+# ngrok tunnel (local dev only)
+# ---------------------------------------------------------------------------
+
+_ngrok_url: str | None = None
+
+def _start_ngrok(port: int) -> str | None:
+    """
+    Start an ngrok tunnel on the given port and return the public HTTPS URL.
+    Only runs when RENDER_EXTERNAL_URL is not set (i.e. local development).
+    Requires NGROK_AUTHTOKEN in .env.
+    """
+    try:
+        from pyngrok import ngrok, conf
+        auth_token = os.getenv("NGROK_AUTHTOKEN")
+        if auth_token:
+            conf.get_default().auth_token = auth_token
+        tunnel = ngrok.connect(port, "http")
+        url = tunnel.public_url.replace("http://", "https://")
+        print(f"\n  ngrok tunnel active: {url}\n")
+        return url
+    except Exception as exc:
+        print(f"  [warning] Could not start ngrok: {exc}")
+        print("  Instagram will not be able to fetch local files.")
+        print("  Set NGROK_AUTHTOKEN in .env to enable the tunnel.\n")
+        return None
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _base_url() -> str:
     """
     Return the public base URL of this app.
-    On Render, RENDER_EXTERNAL_URL is set automatically.
-    Locally, falls back to http://localhost:5050
+    Priority: RENDER_EXTERNAL_URL → ngrok tunnel → localhost (fallback)
     """
-    return os.getenv("RENDER_EXTERNAL_URL", "http://localhost:5050").rstrip("/")
+    render_url = os.getenv("RENDER_EXTERNAL_URL")
+    if render_url:
+        return render_url.rstrip("/")
+    if _ngrok_url:
+        return _ngrok_url.rstrip("/")
+    return "http://localhost:5050"
 
 
 def _instagram_client() -> InstagramAPI:
@@ -124,6 +156,12 @@ def post_stream():
                     emit_done(False)
                     return
 
+                # --- Warn if YouTube cookies not configured ---
+                if not os.getenv("YOUTUBE_COOKIES"):
+                    emit("download", "WARNING: YOUTUBE_COOKIES not set — YouTube may block the download as a bot. Add it in Render environment variables.", "error")
+                    emit_done(False)
+                    return
+
                 # --- Step 1: Download from YouTube ---
                 emit("download", "Downloading video from YouTube...", "info")
                 result = download_youtube_short(youtube_url)
@@ -206,4 +244,8 @@ def post_stream():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5050, threaded=True)
+    PORT = 5050
+    # Start ngrok only when running locally (not on Render)
+    if not os.getenv("RENDER_EXTERNAL_URL"):
+        _ngrok_url = _start_ngrok(PORT)
+    app.run(debug=False, port=PORT, threaded=True)
